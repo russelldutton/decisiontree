@@ -16,37 +16,45 @@ dataset = [] # list of lists containing all the data to be processed for the tre
 ########################
 # Function Declarations
 ########################
-# Dataset Partition on given attribute
+# Dataset Partition on given attribute.
+# Returns dict with each subset according to attr values in dataSpec
 def partition(set, attr):
-    pass
+    partitionedSet = {}
+    for tag in dataSpec[attr]: # Split according to each value of attribute
+        subset = [] # Temp var for holding subset
+        index = attributes.index(attr)
+        for row in dataset:
+            if row[index].upper() == tag.upper():
+                subset.append(row) # Add row to subset
+        partitionedSet[tag] = subset # Store subset in dict
+    return partitionedSet
 
-# Calculate entropy of a set
+# Calculate entropy of a set.
+# Parameters are the 
+#   subset to calculate the entropy on, and 
+#   the classTag to use
+# Returns the entropy of the data set
 def entropy(subset, classTag):
-    # Calculate index for class field. Usually -1
+    # Calculate index for class field. Usually -1. But can accomodate multiple classes
     index = - len(classes) - classes.index(classTag)
-    
     entropy = 0
     totalRows = len(subset)
-
     for value in dataSpec[classTag]:
         count = 0
-
         for row in subset:
             if row[index] == value:
                 count += 1
-        
         prob = float(count) / totalRows
         if prob == 0:
             entropy += 0
         else:
             entropy += prob * math.log(prob, 2)
-    
     return entropy * -1
 
 
 # Reads in and interprets the data.spec file that details the data properties for the algorithm
 def readSpec():
-    file = open("bin/data/data.spec")
+    file = open("data/data.spec")
     #spec = file.read()
 
     for line in file:
@@ -75,7 +83,7 @@ def readSpec():
 
 # Reads in the data from data.dat to be processed in the tree induction
 def readData():
-    file = open("bin/data/data.dat")
+    file = open("data/data.dat")
     for line in file:
         dataset.append(line.strip().split(' '))
     file.close()
@@ -95,5 +103,12 @@ if __name__ == '__main__':
 
     # for row in dataset:
         # print(row)
-    entropy = entropy(dataset, classes[0])
+    entropyAll = entropy(dataset, classes[0])
     print(entropy)
+
+    partitioned = partition(dataset, attributes[0])
+    # print(partitioned)
+    for key in partitioned:
+        subset = partitioned[key]
+        ent = entropy(subset, classes[0])
+        print(ent)
