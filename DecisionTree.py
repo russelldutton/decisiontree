@@ -1,9 +1,9 @@
 ####################
 # Import Statements
 ####################
-#from math import log
 import math
-import operator
+import Node
+import sys
 
 ########################
 # Variable declarations
@@ -12,10 +12,15 @@ dataSpec = {} # Dict for holding all dataSpec as keys and a list of their values
 attributes = [] # list of attributes in dataSpec
 classes = [] # list of the classes in dataSpec
 dataset = [] # list of lists containing all the data to be processed for the tree induction
+root = None
 
 ########################
 # Function Declarations
 ########################
+# Discrete data algorithm
+def trainDiscrete():
+    pass
+
 # Dataset Partition on given attribute.
 # Returns dict with each subset according to attr values in dataSpec
 def partition(set, attr):
@@ -53,8 +58,8 @@ def entropy(subset, classTag):
 
 
 # Reads in and interprets the data.spec file that details the data properties for the algorithm
-def readSpec():
-    file = open("data/data.spec")
+def readSpec(filePath):
+    file = open(filePath)
     #spec = file.read()
 
     for line in file:
@@ -82,8 +87,8 @@ def readSpec():
     file.close()
 
 # Reads in the data from data.dat to be processed in the tree induction
-def readData():
-    file = open("data/data.dat")
+def readData(filePath):
+    file = open(filePath)
     for line in file:
         dataset.append(line.strip().split(' '))
     file.close()
@@ -93,22 +98,12 @@ def readData():
 # "Main Method"
 ################
 if __name__ == '__main__':
-    readSpec()
+    specPath = "data/data.spec"
+    dataPath = "data/data.dat"
+    if len(sys.argv) > 3:
+        specPath = sys.argv[2]
+        dataPath = sys.argv[3]
+    readSpec(specPath)
+    readData(dataPath)
 
-    print(dataSpec)
-    print(attributes)
-    print(classes)
-
-    readData()
-
-    # for row in dataset:
-        # print(row)
-    entropyAll = entropy(dataset, classes[0])
-    print(entropy)
-
-    partitioned = partition(dataset, attributes[0])
-    # print(partitioned)
-    for key in partitioned:
-        subset = partitioned[key]
-        ent = entropy(subset, classes[0])
-        print(ent)
+    print(dataset)
