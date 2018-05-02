@@ -1,8 +1,8 @@
 ####################
 # Import Statements
 ####################
-import math
-import Node
+from math import log
+from Node import Node
 import sys
 
 ########################
@@ -18,8 +18,64 @@ root = None
 # Function Declarations
 ########################
 # Discrete data algorithm
-def trainDiscrete():
+def trainDiscrete(subset, attribute_list):
+    data = subset[:]
+    attrs = attribute_list[:]
+    default = getDefault(subset)
+    data_entropy = entropy(data, classes[0])
+
+    if len(data) == 0: # If empty dataset
+        node = Node(default, True)
+        return node
+    elif isHomogenous(data, classes[0]): # Homogenous dataset
+        node = Node(data[0][-1], True)
+        return node
+    else: # Heterogenous dataset
+        best_gain = 0
+        best_sets = None
+        best_attr = None
+        for x in attrs:
+            subsets = partition(data, x)
+            split_entropy = 0
+            split_info = 0
+            for o in subsets:
+                outcome_probability = float(len(subsets[o]))/float(len(data))
+                split_entropy += entropy(subsets[o], classes[0]) * outcome_probability
+                split_info += outcome_probability * log(outcome_probability, 2)
+            gain = data_entropy - split_entropy
+            gain /= (-1) * split_info
+            if gain > best_gain:
+                best_gain = gain
+                best_sets = subsets
+                best_attr = x
+        node = {best_attr: {}}
+        # return node
+        attrs.remove(best_attr)
+        for o in best_sets:
+            child = trainDiscrete(best_sets[o], attrs)
+            node[best_attr] = Node(best_attr, False).add_child(o, child)
+    return node
+
+
+def isHomogenous(data, classifier):
+    tag = data[0][-1]
+    for row in data:
+        if tag != row[-1]:
+            return False
+    return True
+
+def getBestAttribute(attrs, class_val, subset):
     pass
+
+def getDefault(subset):
+    counts = []
+    classValues = dataSpec[classes[0]]
+    for i in range(len(classValues)):
+        counts.append(0)
+        for row in subset:
+            if row[-1] == classValues[i]:
+                counts[i] += 1 
+    return classValues[counts.index(max(counts))]
 
 # Dataset Partition on given attribute.
 # Returns dict with each subset according to attr values in dataSpec
@@ -28,7 +84,7 @@ def partition(set, attr):
     for tag in dataSpec[attr]: # Split according to each value of attribute
         subset = [] # Temp var for holding subset
         index = attributes.index(attr)
-        for row in dataset:
+        for row in set:
             if row[index].upper() == tag.upper():
                 subset.append(row) # Add row to subset
         partitionedSet[tag] = subset # Store subset in dict
@@ -37,14 +93,14 @@ def partition(set, attr):
 # Calculate entropy of a set.
 # Parameters are the 
 #   subset to calculate the entropy on, and 
-#   the classTag to use
+#   the classifier to use
 # Returns the entropy of the data set
-def entropy(subset, classTag):
+def entropy(subset, classifier):
     # Calculate index for class field. Usually -1. But can accomodate multiple classes
-    index = - len(classes) - classes.index(classTag)
+    index = - len(classes) - classes.index(classifier)
     entropy = 0
     totalRows = len(subset)
-    for value in dataSpec[classTag]:
+    for value in dataSpec[classifier]:
         count = 0
         for row in subset:
             if row[index] == value:
@@ -53,7 +109,7 @@ def entropy(subset, classTag):
         if prob == 0:
             entropy += 0
         else:
-            entropy += prob * math.log(prob, 2)
+            entropy += prob * log(prob, 2)
     return entropy * -1
 
 
@@ -106,4 +162,7 @@ if __name__ == '__main__':
     readSpec(specPath)
     readData(dataPath)
 
-    print(dataset)
+    # print(dataset)
+    # print(getDefault(dataset))
+    tree = trainDiscrete(dataset, attributes)
+    print(tree)
