@@ -12,29 +12,47 @@ dataSpec = {} # Dict for holding all dataSpec as keys and a list of their values
 attributes = [] # list of attributes in dataSpec
 classes = [] # list of the classes in dataSpec
 dataset = [] # list of lists containing all the data to be processed for the tree induction
-root = None
 
 ########################
 # Function Declarations
 ########################
 # Discrete data algorithm
-def trainDiscrete(subset, attribute_list):
+def train_discrete(subset, attribute_list):
     data = subset[:]
     attrs = attribute_list[:]
-    default = getDefault(subset)
-    data_entropy = entropy(data, classes[0])
+    default = get_default(data)
 
     if len(data) == 0: # If empty dataset
-        node = Node(default, True)
+        node = {"class": default, "is_leaf": True, "children": {}}
         return node
-    elif isHomogenous(data, classes[0]): # Homogenous dataset
-        node = Node(data[0][-1], True)
+    elif is_homogenous(data, classes[0]): # Homogenous dataset
+        node = {"class": data[0][-1], "is_leaf": True, "children": {}}
         return node
     else: # Heterogenous dataset
-        best_gain = 0
-        best_sets = None
-        best_attr = None
-        for x in attrs:
+        best = get_best_attribute(attrs, classes[0], data)
+        best_sets = best["sets"]
+        best_attr = best["attr"]
+        node = {best_attr: {"is_leaf": False, "children": {}}}
+        # return node
+        attrs.remove(best_attr)
+        for o in best_sets:
+            child = train_discrete(best_sets[o], attrs)
+            node[best_attr]["children"][o] = child
+        return node
+
+def is_homogenous(data, classifier):
+    tag = data[0][-1]
+    for row in data:
+        if tag != row[-1]:
+            return False
+    return True
+
+def get_best_attribute(attrs, class_val, data):
+    data_entropy = entropy(data, classes[0])
+    best_gain = 0
+    best_sets = None
+    best_attr = None
+    for x in attrs:
             subsets = partition(data, x)
             split_entropy = 0
             split_info = 0
@@ -48,26 +66,10 @@ def trainDiscrete(subset, attribute_list):
                 best_gain = gain
                 best_sets = subsets
                 best_attr = x
-        node = {best_attr: {}}
-        # return node
-        attrs.remove(best_attr)
-        for o in best_sets:
-            child = trainDiscrete(best_sets[o], attrs)
-            node[best_attr] = Node(best_attr, False).add_child(o, child)
-    return node
+    best = {"sets": best_sets, "attr": best_attr}
+    return best
 
-
-def isHomogenous(data, classifier):
-    tag = data[0][-1]
-    for row in data:
-        if tag != row[-1]:
-            return False
-    return True
-
-def getBestAttribute(attrs, class_val, subset):
-    pass
-
-def getDefault(subset):
+def get_default(subset):
     counts = []
     classValues = dataSpec[classes[0]]
     for i in range(len(classValues)):
@@ -114,7 +116,7 @@ def entropy(subset, classifier):
 
 
 # Reads in and interprets the data.spec file that details the data properties for the algorithm
-def readSpec(filePath):
+def read_spec(filePath):
     file = open(filePath)
     #spec = file.read()
 
@@ -143,7 +145,7 @@ def readSpec(filePath):
     file.close()
 
 # Reads in the data from data.dat to be processed in the tree induction
-def readData(filePath):
+def read_data(filePath):
     file = open(filePath)
     for line in file:
         dataset.append(line.strip().split(' '))
@@ -159,10 +161,10 @@ if __name__ == '__main__':
     if len(sys.argv) > 3:
         specPath = sys.argv[2]
         dataPath = sys.argv[3]
-    readSpec(specPath)
-    readData(dataPath)
+    read_spec(specPath)
+    read_data(dataPath)
 
     # print(dataset)
-    # print(getDefault(dataset))
-    tree = trainDiscrete(dataset, attributes)
+    # print(get_default(dataset))
+    tree = train_discrete(dataset, attributes)
     print(tree)
