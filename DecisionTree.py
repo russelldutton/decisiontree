@@ -4,6 +4,7 @@
 # from __future__ import print_function
 from math import log
 import sys
+# import pydot
 
 ########################
 # Variable declarations
@@ -28,7 +29,8 @@ def train_discrete(subset, attribute_list):
     Discrete data algorithm
     Returns a tree in the form of:
     tree = {
-        is_leaf: T/F8
+        label: <string>
+        is_leaf: T/F
         class: <class> # Only if is_leaf is true
         children = { # Only if is_leaf is false will children have values
                 <label>: <tree>
@@ -60,23 +62,37 @@ def train_discrete(subset, attribute_list):
         return node
 
 
-def print_discrete(tree, class_name, start):
+def print_discrete(tree, class_name, rule_string=""):
     """
     Print tree produced by the train_discrete method
     """
     if tree["is_leaf"] is True:
-        out = "THEN {s1} is {s2}"
-        print(out.format(s1=tree["class"], s2=tree["label"]))
+        rule_string += "THEN {s1} is {s2}"
+        print(rule_string.format(s1=tree["class"], s2=tree["label"]))
+        # draw(tree["label"], tree[""])
     else:
         keys = tree["children"].keys()
         for key in keys:
-            if start is True:
-                print("IF", end='')
+            out = rule_string
+            if rule_string is "":
+                out = "IF"
             else:
-                print("AND", end='')
-            out = " ( {s1} IS {s2} ) "
-            print(out.format(s1=tree["label"], s2=key), end='')
-            print_discrete(tree["children"][key], class_name, False)
+                out += "AND"
+            temp_string = " ( {s1} IS {s2} ) "
+            out += temp_string.format(s1=tree["label"], s2=key)
+            # if tree["children"] is not {}:
+            #     if tree["children"][key]["is_leaf"] is True:
+            #         draw(tree["label"], tree["label"] + "_"
+            #              + tree["children"][key]["label"], key)
+            #     else:
+            #         draw(tree["label"],
+            #              tree["children"][key]["label"], key)
+            print_discrete(tree["children"][key], class_name, out)
+
+
+# def draw(parent, vert, label):
+#     edge = pydot.Edge(parent, vert, label=label)
+#     graph.add_edge(edge)
 
 
 def is_homogenous(data, classifier):
@@ -106,9 +122,16 @@ def get_best_attribute(attrs, class_val, data):
                 outcome_probability = float(len(subsets[o]))/float(len(data))
                 split_entropy += entropy(subsets[o], classes[0])
                 split_entropy *= outcome_probability
-                split_info += outcome_probability * log(outcome_probability, 2)
+                temp = 0
+                if outcome_probability > 0:
+                    temp += outcome_probability
+                    temp *= log(outcome_probability, 2)
+                    split_info += temp
+                else:
+                    split_info += 0
             gain = data_entropy - split_entropy
-            gain /= (-1) * split_info
+            if split_info > 0:
+                gain /= -1.0 * split_info
             if gain > best_gain:
                 best_gain = gain
                 best_sets = subsets
@@ -159,13 +182,16 @@ def entropy(subset, classifier):
     # But can accomodate multiple classes
     index = - len(classes) - classes.index(classifier)
     entropy = 0
-    totalRows = len(subset)
+    total_rows = len(subset)
     for value in dataSpec[classifier]:
         count = 0
         for row in subset:
             if row[index] == value:
                 count += 1
-        prob = float(count) / totalRows
+        if total_rows > 0:
+            prob = float(count) / total_rows
+        else:
+            prob = 0
         if prob == 0:
             entropy += 0
         else:
@@ -228,8 +254,11 @@ if __name__ == '__main__':
     read_spec(specPath)
     read_data(dataPath)
 
-    # print(dataset)
-    # print(get_default(dataset))
+    # graph = pydot.Dot(graph_type="graph")
+
+    # print(training_dataset)
+    # print(get_default(training_dataset))
     tree = train_discrete(training_dataset, attributes)
-    print(tree)
-    print_discrete(tree, classes[0], True)
+    # print(tree)
+    print_discrete(tree, classes[0])
+    # graph.write_png("graph.png")
