@@ -17,7 +17,14 @@ attributes = []
 classes = []
 # list of lists containing all the data to be processed for the tree induction
 training_dataset = []
+# data to test tree classification
 test_dataset = []
+# condition to account for missing values
+has_missing = False
+# condition to account for continuous data
+has_continuous = False
+# condition whether the tree should be pruned after being created
+must_prune = False
 
 ########################
 # Function Declarations
@@ -254,11 +261,19 @@ if __name__ == '__main__':
     read_spec(specPath)
     read_data(dataPath)
 
-    # graph = pydot.Dot(graph_type="graph")
+    command = sys.argv[1]
+    command = command[1:]
+    if command[0] == 'c':
+        has_continuous = True
+    elif command[0] == 'm':
+        has_missing = True
+    elif command[0] == 'p':
+        must_prune = True
 
-    # print(training_dataset)
-    # print(get_default(training_dataset))
-    tree = train_discrete(training_dataset, attributes)
-    # print(tree)
-    print_discrete(tree, classes[0])
+    # graph = pydot.Dot(graph_type="graph")
+    if has_continuous is True or has_missing is True or must_prune is True:
+        print(("Command {s} not yet implemented").format(s=command))
+    else:
+        tree = train_discrete(training_dataset, attributes)
+        print_discrete(tree, classes[0])
     # graph.write_png("graph.png")
