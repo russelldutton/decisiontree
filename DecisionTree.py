@@ -65,11 +65,10 @@ def train_tree(subset, attribute_list):
         best_attr = best["attr"]
         node = {"label": best_attr, "is_leaf": False, "children": {}}
         # return node
-        attr_remove_value = best_attr.split(" ")[0]
-        attrs.remove(attr_remove_value)
+        attrs.remove(best_attr)
         for o in best_sets:
             child = train_tree(best_sets[o], attrs)
-            o = o if is_real(o) else o.lower()
+            o = o.lower()
             node["children"][o] = child
         return node
 
@@ -135,15 +134,13 @@ def get_best_attribute(attrs, class_val, data):
             best_continuous_gain = 0
             upper_bound = len(value_list) - 1
             for index in range(upper_bound):
-                split_entropy = 0
-                split_info = 0
                 x_one = value_list[index]
                 x_two = value_list[index + 1]
                 threshold = (x_one + x_two) / 2
                 subsets = partition(data, x, threshold)
-                len_data = float(len(data))
                 for s in subsets:  # subsets here have 2 lists
                     len_subset = float(len(subsets[s]))
+                    len_data = float(len(data))
                     outcome_probability = len_subset/len_data
                     split_entropy += entropy(subsets[s], classes[0])
                     split_entropy *= outcome_probability
@@ -155,8 +152,8 @@ def get_best_attribute(attrs, class_val, data):
                     else:
                         split_info += 0
                 gain = data_entropy - split_entropy
-                if split_info < 0:
-                    gain /= (-1.0 * split_info)
+                if split_info > 0:
+                    gain /= -1.0 * split_info
                 if gain > best_continuous_gain:
                     best_continuous_gain = gain
                     best_attr = threshold
@@ -182,8 +179,6 @@ def get_best_attribute(attrs, class_val, data):
             best_gain = gain
             best_sets = subsets
             best_attr = x
-            if dataSpec[x] == "continuous" and has_continuous:
-                best_attr += " <= " + str(threshold)
     best = {"sets": best_sets, "attr": best_attr}
     return best
 
@@ -191,12 +186,9 @@ def get_best_attribute(attrs, class_val, data):
 def get_unique_list(data, attr):
     new_list = []
     for row in data:
-        index = attributes.index(attr)
-        val = int(row[index])
-        if val not in new_list:
-            new_list.append(val)
-    new_list.sort()
-    return new_list
+        if row[attr] not in new_list:
+            new_list.append(row[attr])
+    return new_list.sort()
 
 
 def get_default(subset):
@@ -223,7 +215,7 @@ def partition(data, split, threshold=None):
         partitionedSet[0] = []
         partitionedSet[1] = []
         for row in data:
-            index = 0 if row[attributes.index(split)] < threshold else 1
+            index = 0 if row[split] < threshold else 1
             partitionedSet[index].append(row)
     else:
         # Split according to each value of attribute
@@ -231,7 +223,7 @@ def partition(data, split, threshold=None):
             subset = []  # Temp var for holding subset
             index = attributes.index(split)
             for row in data:
-                if not is_real(row[index]) and row[index].upper() == tag.upper():
+                if row[index].upper() == tag.upper():
                     subset.append(row)  # Add row to subset
             partitionedSet[tag] = subset  # Store subset in dict
     return partitionedSet
@@ -242,14 +234,8 @@ def classify(tree, dataset):
     for row in dataset:
         path = tree
         while path['is_leaf'] is not True:
-            path_label = path["label"].split()[0]
-            attr_index = attributes.index(path_label)
-            if has_continuous and is_real(row[attr_index]):
-                threshold = float(path["label"].split()[-1])
-                decision = 0 if row[attr_index] <= threshold else 1
-            else:
-                row[attr_index] = row[attr_index].lower()
-                decision = row[attr_index]
+            attr_index = attributes.index(path['label'])
+            decision = row[attr_index].lower()
             path = path['children'][decision]
         if row[-1] == path['label']:
             correct += 1
@@ -312,8 +298,6 @@ def read_spec(filePath):
             # Case Attribute
             attributes.append(attr)
             vals = line[index:].lstrip(" { ").rstrip(" } ").split(", ")
-            for val in vals:
-                val = val.lower()
             dataSpec[attr] = vals
         elif line[-4:] == "Real":
             # Case continuous
@@ -323,7 +307,7 @@ def read_spec(filePath):
         else:
             # Case Class
             classes.append(attr)
-            vals = line[index:].strip().split()
+            vals = line[index:].strip().split(" ")
             dataSpec[attr] = vals
         index += 1
 
@@ -333,18 +317,14 @@ def read_spec(filePath):
 def read_data(filePath):
     """
     Reads in the data from data.dat to be processed in the tree induction
+    TODO test/training split
     """
     file = open(filePath)
     for line in file:
-        training_dataset.append(line.strip().split())
-        for a in attributes:
-            if dataSpec[a] == 'continuous' and has_continuous:
-                val = int(training_dataset[-1][attributes.index(a)])
-                training_dataset[-1][attributes.index(a)] = val
-
+        training_dataset.append(line.strip().split(' '))
     num_records = len(training_dataset)
-    num_test = int(floor(0.3 * num_records))
-    for i in range(0, num_test):
+    num_test = floor(0.3 * num_records)
+    for i in range(num_test):
         test_dataset.append(training_dataset.pop(randint(0, num_records - 1)))
         num_records -= 1
     file.close()
@@ -359,6 +339,8 @@ if __name__ == '__main__':
     if len(sys.argv) > 3:
         specPath = sys.argv[2]
         dataPath = sys.argv[3]
+    read_spec(specPath)
+    read_data(dataPath)
 
     command = sys.argv[1]
     command = command[1:]
@@ -369,21 +351,17 @@ if __name__ == '__main__':
     elif command[0] == 'p':
         must_prune = True
 
-    read_spec(specPath)
-    read_data(dataPath)
-
     # graph = pydot.Dot(graph_type="graph")
-    if has_missing or must_prune:
+    if has_continuous or has_missing or must_prune:
         print(("Command {s} not yet implemented").format(s=command))
     else:
-        # print(dataSpec)
         tree = train_tree(training_dataset, attributes)
         # print_tree(tree, classes[0])
-        print(tree)
-        # print(attributes)
-        # print(training_dataset[0])
+        # print(tree)
+        print(attributes)
+        print(training_dataset[0])
         error = classify(tree, training_dataset)
-        print("Training Set Correctness: ", error, "%")
-        # error = classify(tree, test_dataset)
-        # print("Test Set Correctness:", error, "%")
+        print(error)
+        error = classify(tree, test_dataset)
+        print(error)
     # graph.write_png("graph.png")
