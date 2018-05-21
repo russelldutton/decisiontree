@@ -31,6 +31,24 @@ must_prune = False
 ########################
 
 
+def train_continuous(subset, attribute_list):
+    data = subset[:]  # Copy rows from args
+    attrs = attribute_list[:]
+    default = get_default(data)
+
+    if len(data) == 0:
+        node = {"label": default, "is_leaf": True}
+        node["class"] = classes[0]
+        return node
+    elif is_homogenous(data, classes[0]):
+        node["label"] = data[0][-1]
+        node["is_leaf"] = True
+        node["class"] = classes[0]
+        return node
+    else:
+        (best_attr, best_sets) = get_best_attribute(attrs, classes[0], data)
+
+
 def train_discrete(subset, attribute_list):
     """
     Discrete data algorithm
@@ -49,17 +67,15 @@ def train_discrete(subset, attribute_list):
     default = get_default(data)
 
     if len(data) == 0:   # If empty dataset
-        node = {"label": default, "is_leaf": True, "children": {}}
+        node = {"label": default, "is_leaf": True}
         node["class"] = classes[0]
         return node
     elif is_homogenous(data, classes[0]):  # Homogenous dataset
-        node = {"label": data[0][-1], "is_leaf": True, "children": {}}
+        node = {"label": data[0][-1], "is_leaf": True}
         node["class"] = classes[0]
         return node
     else:  # Heterogenous dataset
-        best = get_best_attribute(attrs, classes[0], data)
-        best_sets = best["sets"]
-        best_attr = best["attr"]
+        (best_attr, best_sets) = get_best_attribute(attrs, classes[0], data)
         node = {"label": best_attr, "is_leaf": False, "children": {}}
         # return node
         attrs.remove(best_attr)
@@ -117,34 +133,45 @@ def get_best_attribute(attrs, class_val, data):
     """
     Get the best attribute to split the data set on
     """
-    data_entropy = entropy(data, classes[0])
     best_gain = 0
     best_sets = None
     best_attr = None
     for x in attrs:
-            subsets = partition(data, x)
-            split_entropy = 0
-            split_info = 0
-            for o in subsets:
-                outcome_probability = float(len(subsets[o]))/float(len(data))
-                split_entropy += entropy(subsets[o], classes[0])
-                split_entropy *= outcome_probability
-                temp = 0
-                if outcome_probability > 0:
-                    temp += outcome_probability
-                    temp *= log(outcome_probability, 2)
-                    split_info += temp
-                else:
-                    split_info += 0
-            gain = data_entropy - split_entropy
-            if split_info > 0:
-                gain /= -1.0 * split_info
-            if gain > best_gain:
-                best_gain = gain
-                best_sets = subsets
-                best_attr = x
-    best = {"sets": best_sets, "attr": best_attr}
-    return best
+        if has_continuous and dataSpec[x] == "continuous":
+            (_sets, _gain) = get_best_continuous(data, x)
+        else:
+            (_sets, _gain) = get_best_discrete(data, x)
+        if _gain > best_gain:
+            best_attr = x
+            best_sets = _sets
+            best_gain = _gain
+    return best_attr, best_sets
+
+
+def get_best_discrete(data, attribute):
+    data_entropy = entropy(data, classes[0])
+    subsets = partition(data, attribute)
+    split_entropy = 0
+    split_info = 0
+    for o in subsets:
+        outcome_probability = float(len(subsets[o]))/float(len(data))
+        split_entropy += entropy(subsets[o], classes[0])
+        split_entropy *= outcome_probability
+        temp = 0
+        if outcome_probability > 0:
+            temp += outcome_probability
+            temp *= log(outcome_probability, 2)
+            split_info += temp
+        else:
+            split_info += 0
+    gain = data_entropy - split_entropy
+    if split_info > 0:
+        gain /= -1.0 * split_info
+    return subsets, gain
+
+
+def get_best_continuous(data, attribute):
+    pass
 
 
 def get_default(subset):
@@ -231,23 +258,24 @@ def read_spec(filePath):
 
     for line in file:
         line = line.strip()
+        index = line.find(":")
+        attr = line[0:index]
+        index += 1
         if line.endswith("}"):
             # Case Attribute
-            index = line.find(":")
-            attr = line[0:index]
             attributes.append(attr)
-            index += 1
             vals = line[index:].lstrip(" { ").rstrip(" } ").split(", ")
             dataSpec[attr] = vals
         elif line[-4:] == "Real":
             # Case Continuous
+            attributes.append(attr)
+            dataSpec[attr] = "continuous"
             pass
         else:
             # Case Class
             index = line.find(":")
             attr = line[:index]
             classes.append(attr)
-            index += 1
             vals = line[index:].strip().split(" ")
             dataSpec[attr] = vals
 
