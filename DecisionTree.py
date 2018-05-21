@@ -2,7 +2,7 @@
 # Import Statements
 ####################
 # from __future__ import print_function
-from math import log
+from math import log, floor
 import sys
 # import pydot
 
@@ -206,6 +206,21 @@ def entropy(subset, classifier):
     return entropy * -1
 
 
+def classify(tree, dataset):
+    correct = 0
+    for row in dataset:
+        path = tree
+        while path['is_leaf'] is not True:
+            attr_index = attributes.index(path['label'])
+            decision = row[attr_index].lower()
+            path = path['children'][decision]
+        if row[-1] == path['label']:
+            correct += 1
+    num_rows = len(dataset)
+    error = floor((correct/num_rows)*100) if num_rows > 0 else -1
+    return error
+
+
 def read_spec(filePath):
     """
     Reads in and interprets the data.spec file that details the data properties
@@ -276,4 +291,6 @@ if __name__ == '__main__':
     else:
         tree = train_discrete(training_dataset, attributes)
         print_discrete(tree, classes[0])
+        error = classify(tree, training_dataset)
+        print(error)
     # graph.write_png("graph.png")
