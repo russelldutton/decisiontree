@@ -228,8 +228,8 @@ def get_best_continuous(data, attribute):
                 temp *= log(outcome_probability, 2)
             split_info += temp
         gain = data_entropy - split_entropy
-        if split_info < 0:
-            gain /= -1.0 * split_info
+        # if split_info < 0:
+        #     gain /= -1.0 * split_info
         if gain > best_gain:
             best_threshold = threshold
             best_gain = gain
