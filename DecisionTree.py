@@ -1,10 +1,10 @@
 ####################
 # Import Statements
 ####################
-# from __future__ import print_function
 from math import log, floor
+from random import randint
 import sys
-# import pydot
+
 
 ########################
 # Variable declarations
@@ -37,7 +37,7 @@ def train_continuous(subset, attribute_list):
     default = get_default(data)
     node = {}
 
-    if len(attrs) == 0:
+    if len(data) == 0:
         node["label"] = default
         node["is_leaf"] = True
         node["class"] = classes[0]
@@ -54,13 +54,13 @@ def train_continuous(subset, attribute_list):
         node["is_leaf"] = False
         node["children"] = {}
         if threshold is None:
-            attrs.remove(best_attr)
+            # attrs.remove(best_attr)
             for o in best_sets:
                 child = train_continuous(best_sets[o], attrs)
                 node["children"][o] = child
         else:
-            node["threshold"] = best_attr + " < " + str(threshold)
-            attrs.remove(best_attr)
+            node["threshold"] = threshold
+            # attrs.remove(best_attr)
             for o in best_sets:
                 child = train_continuous(best_sets[o], attrs)
                 node["children"][o] = child
@@ -141,7 +141,8 @@ def print_continuous(tree, class_name, rule_string=""):
                 out += "AND"
             temp_string = " ( {s1} IS {s2} ) "
             if 'threshold' in tree:
-                out += temp_string.format(s1=tree["threshold"], s2=(key == 0))
+                threshold = tree["label"] + " < " + str(tree["threshold"])
+                out += temp_string.format(s1=threshold, s2=(key == 0))
             else:
                 out += temp_string.format(s1=tree["label"], s2=key)
             print_continuous(tree["children"][key], class_name, out)
@@ -188,8 +189,9 @@ def get_best_discrete(data, attribute):
     split_info = 0
     for o in subsets:
         outcome_probability = float(len(subsets[o]))/float(len(data))
-        split_entropy += entropy(subsets[o], classes[0])
-        split_entropy *= outcome_probability
+        subset_entropy = entropy(subsets[o], classes[0])
+        subset_entropy *= outcome_probability
+        split_entropy += subset_entropy
         temp = 0
         if outcome_probability > 0:
             temp += outcome_probability
@@ -330,7 +332,10 @@ def classify(tree, dataset):
         path = tree
         while path['is_leaf'] is not True:
             attr_index = attributes.index(path['label'])
-            decision = row[attr_index].lower()
+            if "threshold" in path:
+                decision = 0 if row[attr_index] < path["threshold"] else 1
+            else:
+                decision = row[attr_index]
             path = path['children'][decision]
         if row[-1] == path['label']:
             correct += 1
@@ -392,7 +397,18 @@ def read_data(filePath):
             else:
                 vals[index] = vals[index].lower()
         training_dataset.append(vals)
+    split_data()
     file.close()
+
+
+def split_data():
+    num_rows = len(training_dataset)
+    num_test = floor(0.3*num_rows)
+    for i in range(num_test):
+        index = randint(0, num_rows - 1)
+        row = training_dataset.pop(index)
+        test_dataset.append(row)
+        num_rows -= 1
 
 
 ################
@@ -414,20 +430,24 @@ if __name__ == '__main__':
     elif command[0] == 'p':
         must_prune = True
 
+    min_test = 101
+    max_test = -1
+    average = 0
+
     read_spec(spec_path)
     read_data(data_path)
-
-    # graph = pydot.Dot(graph_type="graph")
     if has_missing or must_prune:
         print(("Command {s} not yet implemented").format(s=command))
     elif has_continuous:
         tree = train_continuous(training_dataset, attributes)
-        # print(tree)
-        print_continuous(tree, classes[0])
+        # print_continuous(tree, classes[0])
     else:
         tree = train_discrete(training_dataset, attributes)
-        print_discrete(tree, classes[0])
-        # print(training_dataset)
-        error = classify(tree, training_dataset)
-        print("Training accuracy: ", error, "%")
-    # graph.write_png("graph.png")
+        # print_discrete(tree, classes[0])
+    error = classify(tree, test_dataset)
+    average += error
+    if error > max_test:
+        max_test = error
+    if error < min_test:
+        min_test = error
+    split_data()
