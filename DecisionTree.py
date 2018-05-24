@@ -96,7 +96,7 @@ def train_discrete(subset, attribute_list):
         (best_attr, best_sets,
          _t) = get_best_attribute(attrs, classes[0], data)
         node = {"label": best_attr, "is_leaf": False, "children": {}}
-        attrs.remove(best_attr)
+        # attrs.remove(best_attr)
         for o in best_sets:
             child = train_discrete(best_sets[o], attrs)
             node["children"][o] = child
@@ -163,7 +163,7 @@ def get_best_attribute(attrs, class_val, data):
     """
     Get the best attribute to split the data set on
     """
-    best_gain = 0
+    best_gain = -1
     best_sets = None
     best_attr = None
     best_threshold = None
@@ -174,7 +174,7 @@ def get_best_attribute(attrs, class_val, data):
         else:
             (_sets, _gain) = get_best_discrete(data, x)
             _threshold = None
-        if _gain > best_gain:
+        if _gain > best_gain or best_gain < 0:
             best_attr = x
             best_sets = _sets
             best_gain = _gain
