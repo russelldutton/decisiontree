@@ -443,9 +443,4 @@ if __name__ == '__main__':
         tree = train_discrete(training_dataset, attributes)
         print_discrete(tree, classes[0])
     error = classify(tree, test_dataset)
-    average += error
-    if error > max_test:
-        max_test = error
-    if error < min_test:
-        min_test = error
-    split_data()
+    print(error)
