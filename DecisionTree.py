@@ -215,7 +215,7 @@ def get_best_continuous(data, attribute):
         subset_entropy = 0
         x_one = unique_list[index]
         x_two = unique_list[index + 1]
-        threshold = float((x_one + x_two) / 2)
+        threshold = round(float((x_one + x_two) / 2), 5)
         subsets = partition_continuous(data, attribute, threshold)
         for o in subsets:
             subset_rows = float(len(subsets[o]))
@@ -243,7 +243,7 @@ def get_unique_list(data, row_index):
     values = []
     for row in data:
         if row[row_index] not in values:
-            values.append(int(row[row_index]))
+            values.append(float(row[row_index]))
     values.sort()
     return values
 
@@ -262,7 +262,7 @@ def get_default(subset):
     """
     counts = []
     classValues = data_spec[classes[0]]
-    for i in range(len(classValues)):
+    for i in range(0, len(classValues)):
         counts.append(0)
         for row in subset:
             if row[-1] == classValues[i]:
@@ -305,9 +305,7 @@ def entropy(subset, classifier):
     the classifier to use
     Returns the entropy of the data set
     """
-    # Calculate index for class field. Usually -1.
-    # But can accomodate multiple classes
-    index = - len(classes) - classes.index(classifier)
+    index = -1
     entropy = 0
     total_rows = len(subset)
     for value in data_spec[classifier]:
@@ -415,8 +413,8 @@ def split_data():
 # "Main Method"
 ################
 if __name__ == '__main__':
-    spec_path = "data/data_c.spec"
-    data_path = "data/data_c.dat"
+    spec_path = "data/data.spec"
+    data_path = "data/data.dat"
     if len(sys.argv) > 3:
         spec_path = sys.argv[2]
         data_path = sys.argv[3]
@@ -440,10 +438,10 @@ if __name__ == '__main__':
         print(("Command {s} not yet implemented").format(s=command))
     elif has_continuous:
         tree = train_continuous(training_dataset, attributes)
-        # print_continuous(tree, classes[0])
+        print_continuous(tree, classes[0])
     else:
         tree = train_discrete(training_dataset, attributes)
-        # print_discrete(tree, classes[0])
+        print_discrete(tree, classes[0])
     error = classify(tree, test_dataset)
     average += error
     if error > max_test:
