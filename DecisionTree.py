@@ -687,8 +687,8 @@ def split_data():
 # "Main Method"
 ################
 if __name__ == '__main__':
-    spec_path = "data/data_dl.spec"
-    data_path = "data/data_dl.dat"
+    spec_path = "data.spec"
+    data_path = "data.dat"
     if len(sys.argv) > 3:
         spec_path = sys.argv[2]
         data_path = sys.argv[3]
