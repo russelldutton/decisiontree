@@ -155,6 +155,10 @@ def discrete_to_rules(tree, rule_string=""):
         else:
             rule["train"] = 0
         rules.append(rule)
+        tree["test"] = 0
+        tree["num_test"] = 0
+        tree["train"] = 0
+        tree["num_train"] = 0
     else:
         keys = tree["children"].keys()
         for key in keys:
@@ -189,6 +193,10 @@ def continuous_to_rules(tree, rule_string=""):
         else:
             rule["train"] = 0
         rules.append(rule)
+        tree["test"] = 0
+        tree["num_test"] = 0
+        tree["train"] = 0
+        tree["num_train"] = 0
     else:
         keys = tree["children"].keys()
         for key in keys:
@@ -211,9 +219,9 @@ def print_rules():
     for rule in rules:
         out += "["
         out += str(rule["patterns"])
-        out += ":"
+        out += "  "
         out += str(rule["train"])
-        out += ":"
+        out += "  "
         out += str(rule["test"])
         out += "]\t"
         out += rule["rule"]
@@ -493,6 +501,7 @@ def classify(tree, dataset, test_type="test"):
     number of classifications for either the test or training dataset,
     with the test dataset being the default
     """
+    correct = 0
     for row in dataset:
         path = tree
         if has_missing and contains_missing(row):
@@ -500,8 +509,15 @@ def classify(tree, dataset, test_type="test"):
             for c in data_spec[class_name]:
                 patterns[c] = 0
             get_num_patterns(path, row, patterns)
+            max_class = find_max_patterns(patterns)
+            if row[-1] == max_class:
+                correct += 1
+                total_correct[test_type] += 1
         else:
+            before_traverse = total_correct[test_type]
             tree = traverse_tree(path, row, test_type)
+            correct += total_correct[test_type] - before_traverse
+    return correct
 
 
 def traverse_tree(tree, row, test_type="test"):
@@ -576,6 +592,10 @@ def prune(tree, full_tree, initial_error):
         path["is_leaf"] = True
         path["label"] = default
         path["patterns"] = patterns
+        path["num_test"] = 0
+        path["num_train"] = 0
+        path["test"] = 0
+        path["train"] = 0
         test_error_after = classify(full_tree, test_dataset)
         if initial_error - test_error_after < 5:
             initial_error -= test_error_after
@@ -590,7 +610,7 @@ def prune(tree, full_tree, initial_error):
             for c in path["children"]:
                 tree["children"][c] = prune(path["children"][c],
                                             full_tree, initial_error)
-            return tree
+        return tree
 
 
 def read_spec(filePath):
@@ -688,23 +708,75 @@ if __name__ == '__main__':
     read_spec(spec_path)
     read_data(data_path)
     if has_continuous:
+        print("*********************")
+        print("  CONTINUOUS DATA")
+        print("*********************")
         tree = train_continuous(training_dataset)
+        classify(tree, training_dataset, "train")
+        classify(tree, test_dataset, "test")
         continuous_to_rules(tree)
+        for c in total_correct:
+            num_rows = 0
+            title = ""
+            if c == "test":
+                num_rows = len(test_dataset)
+                title = "Testing Classification Error: "
+            else:
+                num_rows = len(training_dataset)
+                title = "Training Classification Error: "
+            error = 100 - round(total_correct[c] / num_rows, 2) * 100
+            print(title, error, "%")
+        print_rules()
     else:
+        print("*********************")
+        if must_prune:
+            print(" DISCRETE - BEFORE PRUNING")
+        elif has_missing:
+            print(" DISCRETE WITH MISSING")
+        else:
+            print(" DISCRETE DATA")
+        print("*********************\n")
         tree = train_discrete(training_dataset)
         classify(tree, training_dataset, "train")
         classify(tree, test_dataset, "test")
         discrete_to_rules(tree)
-        print_rules()
-        print()
+
+        print(total_correct)
+
         for c in total_correct:
             num_rows = 0
+            title = ""
             if c == "test":
                 num_rows = len(test_dataset)
+                title = "Testing Classification Error: "
             else:
                 num_rows = len(training_dataset)
-            print(c, ": ", total_correct[c], "/", num_rows)
+                title = "Training Classification Error: "
+            error = 100 - round(total_correct[c] / num_rows, 2) * 100
+            print(title, error, "%")
+        print_rules()
+        print()
         if must_prune:
-            test_error_before = classify(tree, test_dataset)
+            rules = []
+            total_correct["test"] = 0
+            total_correct["train"] = 0
+            test_error_before = total_correct["test"]/len(test_dataset)
+            test_error_before = round(test_error_before, 2) * 100
             tree = prune(tree, tree, test_error_before)
-    exit()
+            classify(tree, training_dataset, "train")
+            classify(tree, test_dataset, "test")
+            discrete_to_rules(tree)
+
+            print(total_correct)
+
+            for t in total_correct:
+                num_rows = 0
+                if t == "test":
+                    num_rows = len(test_dataset)
+                    title = "Testing Classification Error: "
+                else:
+                    num_rows = len(training_dataset)
+                    title = "Training Classification Error: "
+                error = 100 - round(total_correct[t] / num_rows, 2) * 100
+                print(title, error, "%")
+            print_rules()

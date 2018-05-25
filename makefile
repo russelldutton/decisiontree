@@ -12,4 +12,3 @@ run_missing:
 
 run_pruning:
 	python3 DecisionTree.py -pd data.spec data.dat
-
