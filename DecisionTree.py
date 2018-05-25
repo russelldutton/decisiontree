@@ -14,7 +14,7 @@ data_spec = {}
 # list of attributes in data_spec
 attributes = []
 # list of the classes in data_spec
-classes = []
+class_name = ""
 # list of lists containing all the data to be processed for the tree induction
 training_dataset = []
 # data to test tree classification
@@ -40,16 +40,16 @@ def train_continuous(subset, attribute_list):
     if len(data) == 0:
         node["label"] = default
         node["is_leaf"] = True
-        node["class"] = classes[0]
+        node["class"] = class_name
         return node
-    elif is_homogenous(data, classes[0]):
+    elif is_homogenous(data, class_name):
         node["label"] = data[0][-1]
         node["is_leaf"] = True
-        node["class"] = classes[0]
+        node["class"] = class_name
         return node
     else:
         (best_attr,
-         best_sets, threshold) = get_best_attribute(attrs, classes[0], data)
+         best_sets, threshold) = get_best_attribute(attrs, class_name, data)
         node["label"] = best_attr
         node["is_leaf"] = False
         node["children"] = {}
@@ -86,15 +86,15 @@ def train_discrete(subset, attribute_list):
 
     if len(data) == 0:   # If empty dataset
         node = {"label": default, "is_leaf": True}
-        node["class"] = classes[0]
+        node["class"] = class_name
         return node
-    elif is_homogenous(data, classes[0]):  # Homogenous dataset
+    elif is_homogenous(data, class_name):  # Homogenous dataset
         node = {"label": data[0][-1], "is_leaf": True}
-        node["class"] = classes[0]
+        node["class"] = class_name
         return node
     else:  # Heterogenous dataset
         (best_attr, best_sets,
-         _t) = get_best_attribute(attrs, classes[0], data)
+         _t) = get_best_attribute(attrs, class_name, data)
         node = {"label": best_attr, "is_leaf": False, "children": {}}
         attrs.remove(best_attr)
         for o in best_sets:
@@ -108,7 +108,7 @@ def print_discrete(tree, class_name, rule_string=""):
     Print tree produced by the train_discrete function
     """
     if tree["is_leaf"] is True:
-        rule_string += "THEN {s1} is {s2}"
+        rule_string += "THEN {s1} IS {s2}"
         print(rule_string.format(s1=tree["class"], s2=tree["label"]))
         # draw(tree["label"], tree[""])
     else:
@@ -129,7 +129,7 @@ def print_continuous(tree, class_name, rule_string=""):
     Print tree produced by the train_continuous function
     """
     if tree["is_leaf"]:
-        rule_string += "THEN {s1} is {s2}"
+        rule_string += "THEN {s1} IS {s2}"
         print(rule_string.format(s1=tree["class"], s2=tree["label"]))
     else:
         keys = tree["children"].keys()
@@ -183,13 +183,13 @@ def get_best_attribute(attrs, class_val, data):
 
 
 def get_best_discrete(data, attribute):
-    data_entropy = entropy(data, classes[0])
+    data_entropy = entropy(data, class_name)
     subsets = partition(data, attribute)
     split_entropy = 0
     split_info = 0
     for o in subsets:
         outcome_probability = float(len(subsets[o]))/float(len(data))
-        subset_entropy = entropy(subsets[o], classes[0])
+        subset_entropy = entropy(subsets[o], class_name)
         subset_entropy *= outcome_probability
         split_entropy += subset_entropy
         temp = 0
@@ -198,13 +198,25 @@ def get_best_discrete(data, attribute):
             temp *= log(outcome_probability, 2)
         split_info += temp
     gain = data_entropy - split_entropy
-    if split_info != 0:
+    if has_missing:
+        prob = get_prob_attr_known(data, attribute)
+        gain = (1 - prob) * gain
+    elif split_info != 0:
         gain /= -1.0 * split_info
     return subsets, gain
 
 
+def get_prob_attr_known(data, attribute):
+    count = 0
+    index = attributes.index(attribute)
+    for row in data:
+        if row[index] == '?':
+            count += 1
+    return count
+
+
 def get_best_continuous(data, attribute):
-    data_entropy = entropy(data, classes[0])
+    data_entropy = entropy(data, class_name)
     best_sets = None
     best_gain = 0
     best_threshold = None
@@ -221,7 +233,7 @@ def get_best_continuous(data, attribute):
             subset_rows = float(len(subsets[o]))
             ttl_rows = float(len(data))
             outcome_probability = subset_rows/ttl_rows
-            subset_entropy = entropy(subsets[o], classes[0])
+            subset_entropy = entropy(subsets[o], class_name)
             subset_entropy *= outcome_probability
             split_entropy += subset_entropy
             temp = 0
@@ -261,7 +273,7 @@ def get_default(subset):
     Get the majority class
     """
     counts = []
-    classValues = data_spec[classes[0]]
+    classValues = data_spec[class_name]
     for i in range(0, len(classValues)):
         counts.append(0)
         for row in subset:
@@ -276,11 +288,12 @@ def partition(set, attr):
     Returns dict with each subset according to attr values in data_spec
     """
     partitioned_set = {}
+    # weights = get_weights(set)
     for tag in data_spec[attr]:  # Split according to each value of attribute
         subset = []  # Temp var for holding subset
         index = attributes.index(attr)
         for row in set:
-            if row[index].upper() == tag.upper():
+            if row[index] == tag or row[index] == '?':
                 subset.append(row)  # Add row to subset
         partitioned_set[tag] = subset  # Store subset in dict
     return partitioned_set
@@ -295,6 +308,36 @@ def partition_continuous(data, attr, threshold):
         index = 0 if row[attr_index] < threshold else 1
         partitioned_set[index].append(row)
     return partitioned_set
+
+
+def get_weights(data):
+    weights = {}
+    for key in attributes:
+        weights[key] = {}
+        for a in data_spec[key]:
+            weights[key][a] = 0.0
+
+    for key in attributes:
+        total_known = 0
+        for row in data:
+            index = attributes.index(key)
+            if row[index] != '?':
+                weights[key][row[index]] += 1
+                total_known += 1
+        for a in weights[key]:
+            weights[key][a] /= total_known
+
+    for k in weights:
+        prop = 0.0
+        outcome = ""
+        for a in weights[k]:
+            if weights[k][a] >= prop:
+                prop = weights[k][a]
+                outcome = a
+            del weights[k][a]
+        weights[k]["prop"] = prop
+        weights[k]["outcome"] = outcome
+    return weights
 
 
 def entropy(subset, classifier):
@@ -370,15 +413,15 @@ def read_spec(filePath):
             pass
         else:
             # Case Class
+            global class_name
             index = line.find(":")
             attr = line[:index]
-            classes.append(attr)
+            class_name = attr
             index += 1
             vals = line[index:].strip().split(" ")
             for index in range(len(vals)):
                 vals[index] = vals[index].lower()
             data_spec[attr] = vals
-
     file.close()
 
 
@@ -413,8 +456,8 @@ def split_data():
 # "Main Method"
 ################
 if __name__ == '__main__':
-    spec_path = "data/data.spec"
-    data_path = "data/data.dat"
+    spec_path = "data/data_d.spec"
+    data_path = "data/data_d.dat"
     if len(sys.argv) > 3:
         spec_path = sys.argv[2]
         data_path = sys.argv[3]
@@ -423,9 +466,9 @@ if __name__ == '__main__':
     command = command[1:]
     if command[0] == 'c':
         has_continuous = True
-    elif command[0] == 'm':
+    elif command[0] == 'md':
         has_missing = True
-    elif command[0] == 'p':
+    elif command[0] == 'pd':
         must_prune = True
 
     min_test = 101
@@ -434,13 +477,13 @@ if __name__ == '__main__':
 
     read_spec(spec_path)
     read_data(data_path)
-    if has_missing or must_prune:
+    if must_prune:
         print(("Command {s} not yet implemented").format(s=command))
     elif has_continuous:
         tree = train_continuous(training_dataset, attributes)
-        print_continuous(tree, classes[0])
+        print_continuous(tree, class_name)
     else:
         tree = train_discrete(training_dataset, attributes)
-        print_discrete(tree, classes[0])
-    error = classify(tree, test_dataset)
-    print(error)
+        print_discrete(tree, class_name)
+    # error = classify(tree, test_dataset)
+    # print(error)
