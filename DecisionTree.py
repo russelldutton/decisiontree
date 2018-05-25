@@ -741,8 +741,6 @@ if __name__ == '__main__':
         classify(tree, test_dataset, "test")
         discrete_to_rules(tree)
 
-        print(total_correct)
-
         for c in total_correct:
             num_rows = 0
             title = ""
@@ -766,8 +764,6 @@ if __name__ == '__main__':
             classify(tree, training_dataset, "train")
             classify(tree, test_dataset, "test")
             discrete_to_rules(tree)
-
-            print(total_correct)
 
             for t in total_correct:
                 num_rows = 0
