@@ -41,11 +41,13 @@ def train_continuous(subset, attribute_list):
         node["label"] = default
         node["is_leaf"] = True
         node["class"] = class_name
+        node["patterns"] = 0
         return node
     elif is_homogenous(data, class_name):
         node["label"] = data[0][-1]
         node["is_leaf"] = True
         node["class"] = class_name
+        node["patterns"] = len(data)
         return node
     else:
         (best_attr,
@@ -84,20 +86,31 @@ def train_discrete(subset, attribute_list):
     attrs = attribute_list[:]
     default = get_default(data)
 
+    node = {}
+
     if len(data) == 0:   # If empty dataset
-        node = {"label": default, "is_leaf": True}
+        node["label"] = default
+        node["is_leaf"] = True
         node["class"] = class_name
+        node["patterns"] = 0
         return node
     elif is_homogenous(data, class_name):  # Homogenous dataset
-        node = {"label": data[0][-1], "is_leaf": True}
+        node["label"] = data[0][-1]
+        node["is_leaf"] = True
         node["class"] = class_name
+        node["patterns"] = len(data)
         return node
     else:  # Heterogenous dataset
         (best_attr, best_sets,
          _t) = get_best_attribute(attrs, class_name, data)
         node = {"label": best_attr, "is_leaf": False, "children": {}}
-        attrs.remove(best_attr)
         for o in best_sets:
+            if len(best_sets[o]) == len(data):
+                node["label"] = data[0][-1]
+                node["is_leaf"] = True
+                node["class"] = class_name
+                node["patterns"] = len(data)
+                return node
             child = train_discrete(best_sets[o], attrs)
             node["children"][o] = child
         return node
@@ -108,7 +121,8 @@ def print_discrete(tree, class_name, rule_string=""):
     Print tree produced by the train_discrete function
     """
     if tree["is_leaf"] is True:
-        rule_string += "THEN {s1} IS {s2}"
+        rule_string += "THEN {s1} IS {s2}."
+        rule_string += " (" + str(tree["patterns"]) + " patterns)"
         print(rule_string.format(s1=tree["class"], s2=tree["label"]))
         # draw(tree["label"], tree[""])
     else:
@@ -129,7 +143,8 @@ def print_continuous(tree, class_name, rule_string=""):
     Print tree produced by the train_continuous function
     """
     if tree["is_leaf"]:
-        rule_string += "THEN {s1} IS {s2}"
+        rule_string += "THEN {s1} IS {s2}."
+        rule_string += " (" + str(tree["patterns"]) + " patterns)"
         print(rule_string.format(s1=tree["class"], s2=tree["label"]))
     else:
         keys = tree["children"].keys()
@@ -163,7 +178,7 @@ def get_best_attribute(attrs, class_val, data):
     """
     Get the best attribute to split the data set on
     """
-    best_gain = 0
+    best_gain = -1
     best_sets = None
     best_attr = None
     best_threshold = None
@@ -174,7 +189,7 @@ def get_best_attribute(attrs, class_val, data):
         else:
             (_sets, _gain) = get_best_discrete(data, x)
             _threshold = None
-        if _gain > best_gain:
+        if _gain > best_gain or best_gain < 0:
             best_attr = x
             best_sets = _sets
             best_gain = _gain
@@ -380,8 +395,9 @@ def classify(tree, dataset):
             path = path['children'][decision]
         if row[-1] == path['label']:
             correct += 1
+            # path['correct'] += 1
     num_rows = len(dataset)
-    error = floor((correct/num_rows)*100) if num_rows > 0 else -1
+    error = round(correct/num_rows, 2) if num_rows > 0 else -1
     return error
 
 
@@ -456,19 +472,19 @@ def split_data():
 # "Main Method"
 ################
 if __name__ == '__main__':
-    spec_path = "data/data_d.spec"
-    data_path = "data/data_d.dat"
+    spec_path = "data/data.spec"
+    data_path = "data/data.dat"
     if len(sys.argv) > 3:
         spec_path = sys.argv[2]
         data_path = sys.argv[3]
 
     command = sys.argv[1]
     command = command[1:]
-    if command[0] == 'c':
+    if command == "c":
         has_continuous = True
-    elif command[0] == 'md':
+    elif command == "md":
         has_missing = True
-    elif command[0] == 'pd':
+    elif command == "pd":
         must_prune = True
 
     min_test = 101
@@ -479,11 +495,12 @@ if __name__ == '__main__':
     read_data(data_path)
     if must_prune:
         print(("Command {s} not yet implemented").format(s=command))
-    elif has_continuous:
-        tree = train_continuous(training_dataset, attributes)
-        print_continuous(tree, class_name)
     else:
-        tree = train_discrete(training_dataset, attributes)
-        print_discrete(tree, class_name)
-    # error = classify(tree, test_dataset)
-    # print(error)
+        if has_continuous:
+            tree = train_continuous(training_dataset, attributes)
+            print_continuous(tree, class_name)
+        else:
+            tree = train_discrete(training_dataset, attributes)
+            print_discrete(tree, class_name)
+        error = classify(tree, test_dataset)
+        print(error)
