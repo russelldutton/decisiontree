@@ -215,6 +215,7 @@ def get_best_discrete(data, attribute):
     gain = data_entropy - split_entropy
     if has_missing:
         prob = get_prob_attr_known(data, attribute)
+        prob /= len(data)
         gain = (1 - prob) * gain
     elif split_info != 0:
         gain /= -1.0 * split_info
@@ -257,8 +258,6 @@ def get_best_continuous(data, attribute):
                 temp *= log(outcome_probability, 2)
             split_info += temp
         gain = data_entropy - split_entropy
-        # if split_info < 0:
-        #     gain /= -1.0 * split_info
         if gain > best_gain:
             best_threshold = threshold
             best_gain = gain
@@ -303,12 +302,11 @@ def partition(set, attr):
     Returns dict with each subset according to attr values in data_spec
     """
     partitioned_set = {}
-    # weights = get_weights(set)
     for tag in data_spec[attr]:  # Split according to each value of attribute
         subset = []  # Temp var for holding subset
         index = attributes.index(attr)
         for row in set:
-            if row[index] == tag or row[index] == '?':
+            if row[index] == tag:
                 subset.append(row)  # Add row to subset
         partitioned_set[tag] = subset  # Store subset in dict
     return partitioned_set
@@ -323,36 +321,6 @@ def partition_continuous(data, attr, threshold):
         index = 0 if row[attr_index] < threshold else 1
         partitioned_set[index].append(row)
     return partitioned_set
-
-
-def get_weights(data):
-    weights = {}
-    for key in attributes:
-        weights[key] = {}
-        for a in data_spec[key]:
-            weights[key][a] = 0.0
-
-    for key in attributes:
-        total_known = 0
-        for row in data:
-            index = attributes.index(key)
-            if row[index] != '?':
-                weights[key][row[index]] += 1
-                total_known += 1
-        for a in weights[key]:
-            weights[key][a] /= total_known
-
-    for k in weights:
-        prop = 0.0
-        outcome = ""
-        for a in weights[k]:
-            if weights[k][a] >= prop:
-                prop = weights[k][a]
-                outcome = a
-            del weights[k][a]
-        weights[k]["prop"] = prop
-        weights[k]["outcome"] = outcome
-    return weights
 
 
 def entropy(subset, classifier):
@@ -384,7 +352,7 @@ def entropy(subset, classifier):
 
 def contains_missing(row):
     for e in row:
-        if row[e] == '?':
+        if e == '?':
             return True
     return False
 
@@ -403,9 +371,10 @@ def get_num_patterns(tree, row, patterns):
         else:
             for c in tree["children"]:
                 path = tree["children"][c]
-                result = get_num_patterns(path, row, patterns)
-                for p in patterns:
-                    patterns[p] += result[p]
+                get_num_patterns(path, row, patterns)
+                # for p in patterns:
+                #     patterns[p] += result[p]
+            return patterns
 
 
 def find_max_patterns(patterns):
@@ -503,7 +472,7 @@ def read_data(filePath):
             else:
                 vals[index] = vals[index].lower()
         training_dataset.append(vals)
-    # split_data()
+    split_data()
     file.close()
 
 
@@ -547,9 +516,6 @@ if __name__ == '__main__':
         else:
             tree = train_discrete(training_dataset, attributes)
             print_discrete(tree, class_name)
-            patterns = {}
-            for c in data_spec[class_name]:
-                patterns[c] = 0
-            print(get_num_patterns(tree, training_dataset[-1], patterns))
-        # error = classify(tree, test_dataset)
-        # print(error)
+        print(test_dataset)
+        error = classify(tree, test_dataset)
+        print(error)
