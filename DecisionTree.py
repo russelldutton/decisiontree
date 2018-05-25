@@ -382,20 +382,65 @@ def entropy(subset, classifier):
     return entropy * -1
 
 
+def contains_missing(row):
+    for e in row:
+        if row[e] == '?':
+            return True
+    return False
+
+
+def get_num_patterns(tree, row, patterns):
+    if tree["is_leaf"] is True:
+        patterns[tree["label"]] += tree["patterns"]
+        return patterns
+    else:
+        attr_index = attributes.index(tree["label"])
+        if row[attr_index] != "?":
+            decision = row[attr_index]
+            tree = tree["children"][decision]
+            patterns = get_num_patterns(tree, row, patterns)
+            return patterns
+        else:
+            for c in tree["children"]:
+                path = tree["children"][c]
+                result = get_num_patterns(path, row, patterns)
+                for p in patterns:
+                    patterns[p] += result[p]
+
+
+def find_max_patterns(patterns):
+    max_pattern = None
+    max_value = -1
+    for p in patterns:
+        if max_pattern is None or max_value < patterns[p]:
+            max_pattern = p
+            max_value = patterns[p]
+    return max_pattern
+
+
 def classify(tree, dataset):
     correct = 0
     for row in dataset:
         path = tree
-        while path['is_leaf'] is not True:
-            attr_index = attributes.index(path['label'])
-            if "threshold" in path:
-                decision = 0 if row[attr_index] < path["threshold"] else 1
-            else:
-                decision = row[attr_index]
-            path = path['children'][decision]
-        if row[-1] == path['label']:
-            correct += 1
-            # path['correct'] += 1
+        if has_missing and contains_missing(row):
+            patterns = {}
+            for c in data_spec[class_name]:
+                patterns[c] = 0
+            get_num_patterns(path, row, patterns)
+            max_class = find_max_patterns(patterns)
+            if row[-1] == max_class:
+                correct += 1
+        else:
+            while path['is_leaf'] is not True:
+                attr_index = attributes.index(path['label'])
+                if "threshold" in path:
+                    decision = 0 if row[attr_index] < path["threshold"] else 1
+                else:
+                    decision = row[attr_index]
+                path = path['children'][decision]
+            if row[-1] == path['label']:
+                correct += 1
+                # path['correct'] += 1
     num_rows = len(dataset)
     error = round(correct/num_rows, 2) if num_rows > 0 else -1
     return error
@@ -458,7 +503,7 @@ def read_data(filePath):
             else:
                 vals[index] = vals[index].lower()
         training_dataset.append(vals)
-    split_data()
+    # split_data()
     file.close()
 
 
@@ -491,10 +536,6 @@ if __name__ == '__main__':
     elif command == "pd":
         must_prune = True
 
-    min_test = 101
-    max_test = -1
-    average = 0
-
     read_spec(spec_path)
     read_data(data_path)
     if must_prune:
@@ -506,5 +547,9 @@ if __name__ == '__main__':
         else:
             tree = train_discrete(training_dataset, attributes)
             print_discrete(tree, class_name)
-        error = classify(tree, test_dataset)
-        print(error)
+            patterns = {}
+            for c in data_spec[class_name]:
+                patterns[c] = 0
+            print(get_num_patterns(tree, training_dataset[-1], patterns))
+        # error = classify(tree, test_dataset)
+        # print(error)
