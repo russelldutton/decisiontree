@@ -401,6 +401,10 @@ def classify(tree, dataset):
     return error
 
 
+def prune(tree):
+    pass
+
+
 def read_spec(filePath):
     """
     Reads in and interprets the data.spec file that details the data properties
