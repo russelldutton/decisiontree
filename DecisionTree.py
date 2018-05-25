@@ -3,6 +3,7 @@
 ####################
 from math import log, floor
 from random import randint
+import copy
 import sys
 
 
@@ -13,7 +14,7 @@ import sys
 data_spec = {}
 # list of attributes in data_spec
 attributes = []
-# list of the classes in data_spec
+# class of the data spec
 class_name = ""
 # list of lists containing all the data to be processed for the tree induction
 training_dataset = []
@@ -23,67 +24,69 @@ test_dataset = []
 has_missing = False
 # condition to account for continuous data
 has_continuous = False
-# condition whether the tree should be pruned after being created
+# condition whether the tree should be pruned after being created or not
 must_prune = False
+# List of rules for the tree
+rules = []
 
 ########################
 # Function Declarations
 ########################
 
 
-def train_continuous(subset, attribute_list):
-    data = subset[:]  # Copy rows from args
-    attrs = attribute_list[:]
+def train_continuous(subset):
+    """
+    Function that recursively trains the tree using continuous values.
+    Takes the subset to train with for this call as a parameter.
+
+    Similar to train_discrete, I implemented this function separately
+    for my own sanity
+    """
+    data = subset[:]
     default = get_default(data)
     node = {}
 
     if len(data) == 0:
         node["label"] = default
         node["is_leaf"] = True
-        node["class"] = class_name
         node["patterns"] = 0
+        node["test"] = 0
+        node["train"] = 0
         return node
     elif is_homogenous(data, class_name):
         node["label"] = data[0][-1]
         node["is_leaf"] = True
-        node["class"] = class_name
         node["patterns"] = len(data)
+        node["test"] = 0
+        node["train"] = 0
         return node
     else:
-        (best_attr,
-         best_sets, threshold) = get_best_attribute(attrs, class_name, data)
+        (best_attr, best_sets,
+         threshold) = get_best_attribute(attributes, class_name, data)
         node["label"] = best_attr
         node["is_leaf"] = False
         node["children"] = {}
         if threshold is None:
             # attrs.remove(best_attr)
             for o in best_sets:
-                child = train_continuous(best_sets[o], attrs)
+                child = train_continuous(best_sets[o])
                 node["children"][o] = child
         else:
             node["threshold"] = threshold
             # attrs.remove(best_attr)
             for o in best_sets:
-                child = train_continuous(best_sets[o], attrs)
+                child = train_continuous(best_sets[o])
                 node["children"][o] = child
         return node
 
 
-def train_discrete(subset, attribute_list):
+def train_discrete(subset):
     """
-    Discrete data algorithm
-    Returns a tree in the form of:
-    tree = {
-        label: <string>
-        is_leaf: T/F
-        class: <class> # Only if is_leaf is true
-        children = { # Only if is_leaf is false will children have values
-                <label>: <tree>
-            }
-    }
+    Discrete data algorithm.
+    Induces the tree recursively.
+    Takes the subset to induce for this instance of the function
     """
     data = subset[:]
-    attrs = attribute_list[:]
     default = get_default(data)
 
     node = {}
@@ -91,40 +94,44 @@ def train_discrete(subset, attribute_list):
     if len(data) == 0:   # If empty dataset
         node["label"] = default
         node["is_leaf"] = True
-        node["class"] = class_name
         node["patterns"] = 0
+        node["test"] = 0
+        node["train"] = 0
         return node
     elif is_homogenous(data, class_name):  # Homogenous dataset
         node["label"] = data[0][-1]
         node["is_leaf"] = True
-        node["class"] = class_name
         node["patterns"] = len(data)
+        node["test"] = 0
+        node["train"] = 0
         return node
     else:  # Heterogenous dataset
         (best_attr, best_sets,
-         _t) = get_best_attribute(attrs, class_name, data)
+         _t) = get_best_attribute(attributes, class_name, data)
         node = {"label": best_attr, "is_leaf": False, "children": {}}
         for o in best_sets:
             if len(best_sets[o]) == len(data):
                 node["label"] = data[0][-1]
                 node["is_leaf"] = True
-                node["class"] = class_name
                 node["patterns"] = len(data)
+                node["test"] = 0
+                node["train"] = 0
                 return node
-            child = train_discrete(best_sets[o], attrs)
+            child = train_discrete(best_sets[o])
             node["children"][o] = child
         return node
 
 
-def print_discrete(tree, class_name, rule_string=""):
+def discrete_to_rules(tree, rule_string=""):
     """
-    Print tree produced by the train_discrete function
+    Recursively add rules to the rules list for the tree produced
+    by the train_discrete function.
+    takes the tree to print, and the rule to be printed
     """
     if tree["is_leaf"] is True:
         rule_string += "THEN {s1} IS {s2}."
         rule_string += " (" + str(tree["patterns"]) + " patterns)"
-        print(rule_string.format(s1=tree["class"], s2=tree["label"]))
-        # draw(tree["label"], tree[""])
+        rules.append(rule_string.format(s1=class_name, s2=tree["label"]))
     else:
         keys = tree["children"].keys()
         for key in keys:
@@ -135,17 +142,19 @@ def print_discrete(tree, class_name, rule_string=""):
                 out += "AND"
             temp_string = " ( {s1} IS {s2} ) "
             out += temp_string.format(s1=tree["label"], s2=key)
-            print_discrete(tree["children"][key], class_name, out)
+            discrete_to_rules(tree["children"][key], out)
 
 
-def print_continuous(tree, class_name, rule_string=""):
+def continuous_to_rules(tree, rule_string=""):
     """
-    Print tree produced by the train_continuous function
+    Recursively add rules to the rules list for the tree produced
+    by the train_continuous function.
+    takes the tree to print, and the rule to be printed
     """
     if tree["is_leaf"]:
         rule_string += "THEN {s1} IS {s2}."
         rule_string += " (" + str(tree["patterns"]) + " patterns)"
-        print(rule_string.format(s1=tree["class"], s2=tree["label"]))
+        rules.append(rule_string.format(s1=class_name, s2=tree["label"]))
     else:
         keys = tree["children"].keys()
         for key in keys:
@@ -160,7 +169,7 @@ def print_continuous(tree, class_name, rule_string=""):
                 out += temp_string.format(s1=threshold, s2=(key == 0))
             else:
                 out += temp_string.format(s1=tree["label"], s2=key)
-            print_continuous(tree["children"][key], class_name, out)
+            continuous_to_rules(tree["children"][key], out)
 
 
 def is_homogenous(data, classifier):
@@ -198,6 +207,10 @@ def get_best_attribute(attrs, class_val, data):
 
 
 def get_best_discrete(data, attribute):
+    """
+    Get the best attribute to split on for discrete data after splitting
+    on the attribute provided in the parameter list
+    """
     data_entropy = entropy(data, class_name)
     subsets = partition(data, attribute)
     split_entropy = 0
@@ -223,6 +236,9 @@ def get_best_discrete(data, attribute):
 
 
 def get_prob_attr_known(data, attribute):
+    """
+    Get the probability an attribute is known, used for missing values
+    """
     count = 0
     index = attributes.index(attribute)
     for row in data:
@@ -232,6 +248,10 @@ def get_prob_attr_known(data, attribute):
 
 
 def get_best_continuous(data, attribute):
+    """
+    Get the best attribute to split on after having split on the attribute
+    provided in the parameter list
+    """
     data_entropy = entropy(data, class_name)
     best_sets = None
     best_gain = 0
@@ -266,6 +286,10 @@ def get_best_continuous(data, attribute):
 
 
 def get_unique_list(data, row_index):
+    """
+    Return a list of unique values for the attribute at
+    row_index, in the data subset
+    """
     values = []
     for row in data:
         if row[row_index] not in values:
@@ -275,6 +299,9 @@ def get_unique_list(data, row_index):
 
 
 def is_real(val):
+    """
+    Returns True if value is a Real number, False otherwise
+    """
     try:
         float(val)
         return True
@@ -284,7 +311,7 @@ def is_real(val):
 
 def get_default(subset):
     """
-    Get the majority class
+    Get the majority class of the subset
     """
     counts = []
     classValues = data_spec[class_name]
@@ -300,6 +327,9 @@ def partition(set, attr):
     """
     Dataset Partition on given attribute.
     Returns dict with each subset according to attr values in data_spec
+
+    Note: In the case of missing values, I have opted to exclude them from
+    any partitioning
     """
     partitioned_set = {}
     for tag in data_spec[attr]:  # Split according to each value of attribute
@@ -313,6 +343,9 @@ def partition(set, attr):
 
 
 def partition_continuous(data, attr, threshold):
+    """
+    Partition a data set of continuous values, on the threshold provided
+    """
     partitioned_set = {}
     partitioned_set[0] = []
     partitioned_set[1] = []
@@ -351,6 +384,9 @@ def entropy(subset, classifier):
 
 
 def contains_missing(row):
+    """
+    Returns true if the row contains a missing value somewhere
+    """
     for e in row:
         if e == '?':
             return True
@@ -358,6 +394,17 @@ def contains_missing(row):
 
 
 def get_num_patterns(tree, row, patterns):
+    """
+    This function recursively counts the number of patterns associated with
+    each of the values for the class of the dataset, and returns them. It
+    travels the tree and returns the counts of patterns that the row with
+    a missing value could possibly have belonged to. The result of this
+    function is used to classify said row.
+
+    It is used to classify rows with missing values. In the case of a missing
+    value, the function will count the patterns for all the sub-branches,
+    but will continue to only count relevant branches to the row
+    """
     if tree["is_leaf"] is True:
         patterns[tree["label"]] += tree["patterns"]
         return patterns
@@ -372,12 +419,14 @@ def get_num_patterns(tree, row, patterns):
             for c in tree["children"]:
                 path = tree["children"][c]
                 get_num_patterns(path, row, patterns)
-                # for p in patterns:
-                #     patterns[p] += result[p]
             return patterns
 
 
 def find_max_patterns(patterns):
+    """
+    This function simply returns the class value with the highest count
+    of patterns, and is used in conjunction with get_num_patterns
+    """
     max_pattern = None
     max_value = -1
     for p in patterns:
@@ -387,7 +436,14 @@ def find_max_patterns(patterns):
     return max_pattern
 
 
-def classify(tree, dataset):
+def classify(tree, dataset, type="test"):
+    """
+    This function classifies each row in the dataset using the tree.
+
+    It also counts number of successful classifications and total
+    number of classifications for either the test or training dataset,
+    with the test dataset being the default
+    """
     correct = 0
     for row in dataset:
         path = tree
@@ -409,14 +465,80 @@ def classify(tree, dataset):
                 path = path['children'][decision]
             if row[-1] == path['label']:
                 correct += 1
-                # path['correct'] += 1
     num_rows = len(dataset)
     error = round(correct/num_rows, 2) if num_rows > 0 else -1
     return error
 
 
-def prune(tree):
-    pass
+def is_deep_decision(tree):
+    """
+    This function decides whether the root node of the tree only has
+    leaves as children to prune
+    """
+    if tree["is_leaf"] is True:
+        return False
+    else:
+        for c in tree["children"]:
+            if tree["children"][c]["is_leaf"] is False:
+                return False
+        return True
+
+
+def get_majority(tree):
+    """
+    This function gets the majority class of the leaves of the root node
+    of the tree
+    """
+    class_proportions = {}
+    for e in data_spec[class_name]:
+        class_proportions[e] = 0
+    max_prop = -1
+    max_class = ""
+    for c in tree["children"]:
+        child = tree["children"][c]
+        class_proportions[child["label"]] += int(child["patterns"])
+
+    for p in class_proportions:
+        if class_proportions[p] > max_prop:
+            max_prop = class_proportions[p]
+            max_class = p
+    return max_class
+
+
+def prune(tree, full_tree, initial_error):
+    """
+    Function to prune the tree.
+
+    Tree is a subtree of full_tree and is a reference to a reference
+    to the subtree in full_tree. So any changes made to tree reflect
+    in full_tree
+    """
+    path = tree
+    if is_deep_decision(tree):
+        path = copy.deepcopy(tree)
+        default = get_majority(path)
+        patterns = 0
+        for c in path["children"]:
+            patterns += path["children"][c]["patterns"]
+        del path["children"]
+        path["is_leaf"] = True
+        path["label"] = default
+        path["patterns"] = patterns
+        test_error_after = classify(full_tree, test_dataset)
+        if initial_error - test_error_after < 5:
+            initial_error -= test_error_after
+            del tree
+            tree = copy.deepcopy(path)
+            del path
+        return tree
+    else:
+        if path["is_leaf"] is True:
+            return tree
+        else:
+            for c in path["children"]:
+                tree["children"][c] = prune(path["children"][c],
+                                            full_tree, initial_error)
+            return path
 
 
 def read_spec(filePath):
@@ -477,6 +599,9 @@ def read_data(filePath):
 
 
 def split_data():
+    """
+    Splits the data into 70% training data, 30% test data
+    """
     num_rows = len(training_dataset)
     num_test = floor(0.3*num_rows)
     for i in range(num_test):
@@ -504,18 +629,27 @@ if __name__ == '__main__':
         has_missing = True
     elif command == "pd":
         must_prune = True
+    elif command != "d":
+        print("Command not recognized. Valid options are\n-c\n-md\n-pd")
+        exit()
 
     read_spec(spec_path)
     read_data(data_path)
-    if must_prune:
-        print(("Command {s} not yet implemented").format(s=command))
+    if has_continuous:
+        tree = train_continuous(training_dataset)
+        continuous_to_rules(tree)
     else:
-        if has_continuous:
-            tree = train_continuous(training_dataset, attributes)
-            print_continuous(tree, class_name)
-        else:
-            tree = train_discrete(training_dataset, attributes)
-            print_discrete(tree, class_name)
-        print(test_dataset)
-        error = classify(tree, test_dataset)
-        print(error)
+        tree = train_discrete(training_dataset)
+        discrete_to_rules(tree)
+        for rule in rules:
+            print(rule)
+        print()
+        rules = []
+        if must_prune:
+            test_error_before = classify(tree, test_dataset)
+            tree = prune(tree, tree, test_error_before)
+        discrete_to_rules(tree)
+        for rule in rules:
+            print(rule)
+        rules = []
+    exit()
