@@ -28,6 +28,8 @@ has_continuous = False
 must_prune = False
 # List of rules for the tree
 rules = []
+# Dict holding counts of total rows correctly classified
+total_correct = {"test": 0, "train": 0}
 
 ########################
 # Function Declarations
@@ -51,14 +53,18 @@ def train_continuous(subset):
         node["is_leaf"] = True
         node["patterns"] = 0
         node["test"] = 0
+        node["num_test"] = 0
         node["train"] = 0
+        node["num_train"] = 0
         return node
     elif is_homogenous(data, class_name):
         node["label"] = data[0][-1]
         node["is_leaf"] = True
         node["patterns"] = len(data)
         node["test"] = 0
+        node["num_test"] = 0
         node["train"] = 0
+        node["num_train"] = 0
         return node
     else:
         (best_attr, best_sets,
@@ -96,14 +102,18 @@ def train_discrete(subset):
         node["is_leaf"] = True
         node["patterns"] = 0
         node["test"] = 0
+        node["num_test"] = 0
         node["train"] = 0
+        node["num_train"] = 0
         return node
     elif is_homogenous(data, class_name):  # Homogenous dataset
         node["label"] = data[0][-1]
         node["is_leaf"] = True
         node["patterns"] = len(data)
         node["test"] = 0
+        node["num_test"] = 0
         node["train"] = 0
+        node["num_train"] = 0
         return node
     else:  # Heterogenous dataset
         (best_attr, best_sets,
@@ -115,7 +125,9 @@ def train_discrete(subset):
                 node["is_leaf"] = True
                 node["patterns"] = len(data)
                 node["test"] = 0
+                node["num_test"] = 0
                 node["train"] = 0
+                node["num_train"] = 0
                 return node
             child = train_discrete(best_sets[o])
             node["children"][o] = child
@@ -129,9 +141,20 @@ def discrete_to_rules(tree, rule_string=""):
     takes the tree to print, and the rule to be printed
     """
     if tree["is_leaf"] is True:
-        rule_string += "THEN {s1} IS {s2}."
-        rule_string += " (" + str(tree["patterns"]) + " patterns)"
-        rules.append(rule_string.format(s1=class_name, s2=tree["label"]))
+        rule_string += "THEN {s1} IS {s2}"
+        rule = {"rule": rule_string.format(s1=class_name, s2=tree["label"])}
+        rule["patterns"] = tree["patterns"]
+        if tree["num_test"] != 0:
+            rule["test"] = float(tree["test"])/float(tree["num_test"])
+            rule["test"] = round(1 - rule["test"], 2)
+        else:
+            rule["test"] = 0
+        if tree["num_train"] != 0:
+            rule["train"] = float(tree["train"])/float(tree["num_train"])
+            rule["train"] = round(1 - rule["train"], 2)
+        else:
+            rule["train"] = 0
+        rules.append(rule)
     else:
         keys = tree["children"].keys()
         for key in keys:
@@ -152,9 +175,20 @@ def continuous_to_rules(tree, rule_string=""):
     takes the tree to print, and the rule to be printed
     """
     if tree["is_leaf"]:
-        rule_string += "THEN {s1} IS {s2}."
-        rule_string += " (" + str(tree["patterns"]) + " patterns)"
-        rules.append(rule_string.format(s1=class_name, s2=tree["label"]))
+        rule_string += "THEN {s1} IS {s2}"
+        rule = {"rule": rule_string.format(s1=class_name, s2=tree["label"])}
+        rule["patterns"] = tree["patterns"]
+        if tree["num_test"] != 0:
+            rule["test"] = float(tree["test"])/float(tree["num_test"])
+            rule["test"] = round(1 - rule["test"], 2)
+        else:
+            rule["test"] = 0
+        if tree["num_train"] != 0:
+            rule["train"] = float(tree["train"])/float(tree["num_train"])
+            rule["train"] = round(1 - rule["train"], 2)
+        else:
+            rule["train"] = 0
+        rules.append(rule)
     else:
         keys = tree["children"].keys()
         for key in keys:
@@ -170,6 +204,21 @@ def continuous_to_rules(tree, rule_string=""):
             else:
                 out += temp_string.format(s1=tree["label"], s2=key)
             continuous_to_rules(tree["children"][key], out)
+
+
+def print_rules():
+    out = ""
+    for rule in rules:
+        out += "["
+        out += str(rule["patterns"])
+        out += ":"
+        out += str(rule["train"])
+        out += ":"
+        out += str(rule["test"])
+        out += "]\t"
+        out += rule["rule"]
+        out += "\n"
+    print(out)
 
 
 def is_homogenous(data, classifier):
@@ -436,7 +485,7 @@ def find_max_patterns(patterns):
     return max_pattern
 
 
-def classify(tree, dataset, type="test"):
+def classify(tree, dataset, test_type="test"):
     """
     This function classifies each row in the dataset using the tree.
 
@@ -444,7 +493,6 @@ def classify(tree, dataset, type="test"):
     number of classifications for either the test or training dataset,
     with the test dataset being the default
     """
-    correct = 0
     for row in dataset:
         path = tree
         if has_missing and contains_missing(row):
@@ -452,22 +500,26 @@ def classify(tree, dataset, type="test"):
             for c in data_spec[class_name]:
                 patterns[c] = 0
             get_num_patterns(path, row, patterns)
-            max_class = find_max_patterns(patterns)
-            if row[-1] == max_class:
-                correct += 1
         else:
-            while path['is_leaf'] is not True:
-                attr_index = attributes.index(path['label'])
-                if "threshold" in path:
-                    decision = 0 if row[attr_index] < path["threshold"] else 1
-                else:
-                    decision = row[attr_index]
-                path = path['children'][decision]
-            if row[-1] == path['label']:
-                correct += 1
-    num_rows = len(dataset)
-    error = round(correct/num_rows, 2) if num_rows > 0 else -1
-    return error
+            tree = traverse_tree(path, row, test_type)
+
+
+def traverse_tree(tree, row, test_type="test"):
+    if tree["is_leaf"] is True:
+        if row[-1] == tree["label"]:
+            tree[test_type] += 1
+            total_correct[test_type] += 1
+        tree["num_" + test_type] += 1
+        return tree
+    else:
+        attr_index = attributes.index(tree["label"])
+        if "threshold" in tree:
+            decision = 0 if row[attr_index] < tree["threshold"] else 1
+        else:
+            decision = row[attr_index]
+        tree["children"][decision] = traverse_tree(tree["children"][decision],
+                                                   row, test_type)
+        return tree
 
 
 def is_deep_decision(tree):
@@ -538,7 +590,7 @@ def prune(tree, full_tree, initial_error):
             for c in path["children"]:
                 tree["children"][c] = prune(path["children"][c],
                                             full_tree, initial_error)
-            return path
+            return tree
 
 
 def read_spec(filePath):
@@ -615,8 +667,8 @@ def split_data():
 # "Main Method"
 ################
 if __name__ == '__main__':
-    spec_path = "data/data.spec"
-    data_path = "data/data.dat"
+    spec_path = "data/data_dl.spec"
+    data_path = "data/data_dl.dat"
     if len(sys.argv) > 3:
         spec_path = sys.argv[2]
         data_path = sys.argv[3]
@@ -640,16 +692,19 @@ if __name__ == '__main__':
         continuous_to_rules(tree)
     else:
         tree = train_discrete(training_dataset)
+        classify(tree, training_dataset, "train")
+        classify(tree, test_dataset, "test")
         discrete_to_rules(tree)
-        for rule in rules:
-            print(rule)
+        print_rules()
         print()
-        rules = []
+        for c in total_correct:
+            num_rows = 0
+            if c == "test":
+                num_rows = len(test_dataset)
+            else:
+                num_rows = len(training_dataset)
+            print(c, ": ", total_correct[c], "/", num_rows)
         if must_prune:
             test_error_before = classify(tree, test_dataset)
             tree = prune(tree, tree, test_error_before)
-        discrete_to_rules(tree)
-        for rule in rules:
-            print(rule)
-        rules = []
     exit()
